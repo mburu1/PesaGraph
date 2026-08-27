@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using NSubstitute;
 using PesaGraph.Ledger.Domain;
+using PesaGraph.Liquidity.DTOs;
 using PesaGraph.Ledger.Services;
 using PesaGraph.Liquidity.Services;
 using PesaGraph.Shared.Enums;

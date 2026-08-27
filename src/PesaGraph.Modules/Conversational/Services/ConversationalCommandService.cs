@@ -39,6 +39,11 @@ public class ConversationalCommandService : IConversationalCommandService
 
     public async Task<Result<string>> HandleCommandAsync(InboundCommand command, CancellationToken cancellationToken = default)
     {
+        if (command.TenantId == Guid.Empty)
+        {
+            return Result.Failure<string>(Error.Validation("Conversational.TenantRequired", "A tenant identifier is required."));
+        }
+
         var text = command.RawText.Trim();
         var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var mainCommand = parts.Length > 0 ? parts[0].ToLowerInvariant() : "help";
@@ -77,7 +82,11 @@ public class ConversationalCommandService : IConversationalCommandService
         // Send via WhatsApp if channel is WhatsApp and SenderPhone is present
         if (command.Channel.Equals("WhatsApp", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(command.SenderPhone))
         {
-            await _whatsAppClient.SendTextMessageAsync(command.SenderPhone, responseMessage, cancellationToken);
+            var sendResult = await _whatsAppClient.SendTextMessageAsync(command.SenderPhone, responseMessage, cancellationToken);
+            if (sendResult.IsFailure)
+            {
+                return Result.Failure<string>(sendResult.Error);
+            }
         }
 
         return Result.Success(responseMessage);
