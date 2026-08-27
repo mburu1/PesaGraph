@@ -5,6 +5,9 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\PesaGraph.Shared\PesaGraph.Shared.csproj" />
+    <ProjectReference Include="..\Liquidity\PesaGraph.Liquidity.csproj" />
+    <ProjectReference Include="..\Reconciliation\PesaGraph.Reconciliation.csproj" />
+    <ProjectReference Include="..\Providers\PesaGraph.Providers.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FluentValidation" Version="12.1.1" />
