@@ -20,6 +20,11 @@ file sealed class OrderPlacedEvent : IDomainEvent
     public DateTimeOffset OccurredOnUtc { get; } = DateTimeOffset.UtcNow;
 }
 
+file sealed class IntEntity : Entity<int>
+{
+    public IntEntity(int id) : base(id) { }
+}
+
 public class AggregateRootTests
 {
     [Fact]
@@ -67,11 +72,6 @@ public class AggregateRootTests
 
 public class EntityEqualityTests
 {
-    file sealed class IntEntity : Entity<int>
-    {
-        public IntEntity(int id) : base(id) { }
-    }
-
     [Fact]
     public void Entities_WithSameId_ShouldBeEqual()
     {
