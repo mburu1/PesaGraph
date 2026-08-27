@@ -1,0 +1,4 @@
+# CI placeholder – build, test, lint
+name: CI
+on: [push, pull_request]
+jobs: {}

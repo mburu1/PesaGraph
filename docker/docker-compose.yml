@@ -1,0 +1,3 @@
+# PesaGraph local full stack – placeholder
+# Profiles: rabbitmq / kafka / both
+services: {}

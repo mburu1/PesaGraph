@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <PropertyGroup>
+    <RootNamespace>PesaGraph.Workers</RootNamespace>
+    <AssemblyName>PesaGraph.Workers</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PesaGraph.Shared\PesaGraph.Shared.csproj" />
+    <ProjectReference Include="..\PesaGraph.Infrastructure\PesaGraph.Infrastructure.csproj" />
+    <ProjectReference Include="..\PesaGraph.Modules\Tenancy\PesaGraph.Tenancy.csproj" />
+    <ProjectReference Include="..\PesaGraph.Modules\Providers\PesaGraph.Providers.csproj" />
+    <ProjectReference Include="..\PesaGraph.Modules\Ingestion\PesaGraph.Ingestion.csproj" />
+    <ProjectReference Include="..\PesaGraph.Modules\Ledger\PesaGraph.Ledger.csproj" />
+    <ProjectReference Include="..\PesaGraph.Modules\Reconciliation\PesaGraph.Reconciliation.csproj" />
+    <ProjectReference Include="..\PesaGraph.Modules\Liquidity\PesaGraph.Liquidity.csproj" />
+    <ProjectReference Include="..\PesaGraph.Modules\Conversational\PesaGraph.Conversational.csproj" />
+    <ProjectReference Include="..\PesaGraph.Modules\Notifications\PesaGraph.Notifications.csproj" />
+    <ProjectReference Include="..\PesaGraph.Modules\Audit\PesaGraph.Audit.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MassTransit" Version="9.2.1" />
+    <PackageReference Include="MassTransit.RabbitMQ" Version="9.2.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+  </ItemGroup>
+</Project>
