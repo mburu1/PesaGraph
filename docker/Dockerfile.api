@@ -1,1 +1,39 @@
-# Dockerfile for PesaGraph.Api – placeholder
+# ─── PesaGraph.Api – Multi-stage Dockerfile ──────────────────────────────────
+# Stage 1: SDK – restore & publish
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+# Copy solution + project files first to leverage Docker layer caching
+COPY PesaGraph.sln .
+COPY Directory.Build.props .
+COPY src/PesaGraph.Shared/PesaGraph.Shared.csproj               src/PesaGraph.Shared/
+COPY src/PesaGraph.Infrastructure/PesaGraph.Infrastructure.csproj src/PesaGraph.Infrastructure/
+COPY src/PesaGraph.Modules/PesaGraph.Modules.csproj              src/PesaGraph.Modules/
+COPY src/PesaGraph.Api/PesaGraph.Api.csproj                      src/PesaGraph.Api/
+COPY src/PesaGraph.Workers/PesaGraph.Workers.csproj              src/PesaGraph.Workers/
+
+# Restore only the Api project (and its transitive deps)
+RUN dotnet restore src/PesaGraph.Api/PesaGraph.Api.csproj
+
+# Copy full source and publish
+COPY . .
+RUN dotnet publish src/PesaGraph.Api/PesaGraph.Api.csproj \
+    --no-restore \
+    -c Release \
+    -o /app/publish
+
+# ─── Stage 2: Runtime – minimal aspnet image ─────────────────────────────────
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+WORKDIR /app
+
+# Non-root user for security
+RUN adduser --disabled-password --gecos "" appuser && chown -R appuser /app
+USER appuser
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
+
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "PesaGraph.Api.dll"]

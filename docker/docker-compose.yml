@@ -1,3 +1,226 @@
-# PesaGraph local full stack – placeholder
-# Profiles: rabbitmq / kafka / both
-services: {}
+# ─── PesaGraph Local Full Stack ───────────────────────────────────────────────
+# Profiles: --profile rabbitmq | --profile kafka | --profile both
+#
+# Usage:
+#   # Core services only (API + Workers + DBs + Redis + RabbitMQ):
+#   docker compose -f docker/docker-compose.yml --profile rabbitmq up
+#
+#   # With Kafka / Redpanda stream layer:
+#   docker compose -f docker/docker-compose.yml --profile kafka up
+#
+#   # Both messaging layers:
+#   docker compose -f docker/docker-compose.yml --profile rabbitmq --profile kafka up
+
+name: pesagraph
+
+services:
+
+  # ── Relational Database (PostgreSQL) ────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: pesagraph-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pesagraph
+      POSTGRES_USER: pesagraph
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pesagraph_dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pesagraph"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Document / Event Store (MongoDB) ────────────────────────────────────────
+  mongo:
+    image: mongo:7-jammy
+    container_name: pesagraph-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: pesagraph
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-pesagraph_dev}
+      MONGO_INITDB_DATABASE: pesagraph
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Cache / Coordination (Redis) ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: pesagraph-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── RabbitMQ (Management UI) ─────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: pesagraph-rabbitmq
+    restart: unless-stopped
+    profiles: [rabbitmq, both]
+    environment:
+      RABBITMQ_DEFAULT_USER: pesagraph
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-pesagraph_dev}
+      RABBITMQ_DEFAULT_VHOST: pesagraph
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ── Kafka (via Redpanda – Kafka-compatible, single binary) ───────────────────
+  redpanda:
+    image: redpandadata/redpanda:v24.3.1
+    container_name: pesagraph-redpanda
+    restart: unless-stopped
+    profiles: [kafka, both]
+    command:
+      - redpanda start
+      - --overprovisioned
+      - --smp 1
+      - --memory 512M
+      - --reserve-memory 0M
+      - --node-id 0
+      - --check=false
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    ports:
+      - "19092:19092" # Kafka client (external)
+      - "18081:18081" # Schema registry (external)
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ── Redpanda Console (Kafka UI) ───────────────────────────────────────────────
+  redpanda-console:
+    image: redpandadata/console:v2.7.2
+    container_name: pesagraph-redpanda-console
+    restart: unless-stopped
+    profiles: [kafka, both]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      CONFIG_FILEPATH: /etc/redpanda/redpanda-console-config.yaml
+    volumes:
+      - ./redpanda-console.yaml:/etc/redpanda/redpanda-console-config.yaml:ro
+    ports:
+      - "8082:8080"
+
+  # ── PesaGraph API ─────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: pesagraph-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Relational: "Host=postgres;Database=pesagraph;Username=pesagraph;Password=${POSTGRES_PASSWORD:-pesagraph_dev}"
+      ConnectionStrings__Document: "mongodb://pesagraph:${MONGO_PASSWORD:-pesagraph_dev}@mongo:27017/pesagraph?authSource=admin"
+      Redis__Connection: "redis:6379"
+      RabbitMq__Connection: "amqp://pesagraph:${RABBITMQ_PASSWORD:-pesagraph_dev}@rabbitmq:5672/pesagraph"
+      Kafka__BootstrapServers: "redpanda:9092"
+      Daraja__ConsumerKey: ${DARAJA_CONSUMER_KEY:-sandbox_key}
+      Daraja__ConsumerSecret: ${DARAJA_CONSUMER_SECRET:-sandbox_secret}
+      Airtel__ClientId: ${AIRTEL_CLIENT_ID:-sandbox_id}
+      Airtel__ClientSecret: ${AIRTEL_CLIENT_SECRET:-sandbox_secret}
+      WhatsApp__AccessToken: ${WHATSAPP_ACCESS_TOKEN:-sandbox_token}
+      WhatsApp__PhoneNumberId: ${WHATSAPP_PHONE_NUMBER_ID:-sandbox_phone_id}
+      Sms__ApiKey: ${SMS_API_KEY:-sandbox_key}
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ── PesaGraph Workers ─────────────────────────────────────────────────────────
+  workers:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.workers
+    container_name: pesagraph-workers
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      DOTNET_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ConnectionStrings__Relational: "Host=postgres;Database=pesagraph;Username=pesagraph;Password=${POSTGRES_PASSWORD:-pesagraph_dev}"
+      ConnectionStrings__Document: "mongodb://pesagraph:${MONGO_PASSWORD:-pesagraph_dev}@mongo:27017/pesagraph?authSource=admin"
+      Redis__Connection: "redis:6379"
+      RabbitMq__Connection: "amqp://pesagraph:${RABBITMQ_PASSWORD:-pesagraph_dev}@rabbitmq:5672/pesagraph"
+      Kafka__BootstrapServers: "redpanda:9092"
+      Daraja__ConsumerKey: ${DARAJA_CONSUMER_KEY:-sandbox_key}
+      Daraja__ConsumerSecret: ${DARAJA_CONSUMER_SECRET:-sandbox_secret}
+      Airtel__ClientId: ${AIRTEL_CLIENT_ID:-sandbox_id}
+      Airtel__ClientSecret: ${AIRTEL_CLIENT_SECRET:-sandbox_secret}
+      WhatsApp__AccessToken: ${WHATSAPP_ACCESS_TOKEN:-sandbox_token}
+      WhatsApp__PhoneNumberId: ${WHATSAPP_PHONE_NUMBER_ID:-sandbox_phone_id}
+      Sms__ApiKey: ${SMS_API_KEY:-sandbox_key}
+
+  # ── Angular Frontend ──────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    container_name: pesagraph-frontend
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "4200:80"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:
+  mongo_data:
+  redis_data:
+  rabbitmq_data:
+  redpanda_data:
+
+networks:
+  default:
+    name: pesagraph-network

@@ -1,2 +1,38 @@
-# RabbitMQ profile – placeholder
-services: {}
+# ─── RabbitMQ Standalone Profile ─────────────────────────────────────────────
+# Extends the main docker-compose.yml with RabbitMQ-specific overrides.
+#
+# Usage (standalone, without the full stack):
+#   docker compose -f docker/docker-compose.rabbitmq.yml up
+#
+# Or extend base:
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.rabbitmq.yml up
+
+services:
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: pesagraph-rabbitmq-standalone
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: pesagraph
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-pesagraph_dev}
+      RABBITMQ_DEFAULT_VHOST: pesagraph
+      # Enable useful plugins
+      RABBITMQ_ENABLED_PLUGINS_FILE: /etc/rabbitmq/enabled_plugins
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI  → http://localhost:15672
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  rabbitmq_data:
+
+networks:
+  default:
+    name: pesagraph-network

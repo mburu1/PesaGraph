@@ -1,2 +1,91 @@
-# Kafka / Redpanda profile – placeholder
-services: {}
+# ─── Kafka / Redpanda Standalone Profile ──────────────────────────────────────
+# Provides a Kafka-compatible durable event log layer via Redpanda
+# (single-binary, Kafka-compatible – no Zookeeper needed).
+#
+# Usage (standalone):
+#   docker compose -f docker/docker-compose.kafka.yml up
+#
+# Or extend base stack:
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.kafka.yml up
+
+services:
+
+  redpanda:
+    image: redpandadata/redpanda:v24.3.1
+    container_name: pesagraph-redpanda-standalone
+    restart: unless-stopped
+    command:
+      - redpanda start
+      - --overprovisioned
+      - --smp 1
+      - --memory 512M
+      - --reserve-memory 0M
+      - --node-id 0
+      - --check=false
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr external://localhost:18082
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    ports:
+      - "19092:19092" # Kafka client (host)
+      - "18081:18081" # Schema registry
+      - "18082:18082" # HTTP proxy (Pandaproxy)
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # Redpanda Console – Kafka topic browser / consumer group inspector
+  redpanda-console:
+    image: redpandadata/console:v2.7.2
+    container_name: pesagraph-redpanda-console
+    restart: unless-stopped
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      CONFIG_FILEPATH: /etc/redpanda/config.yaml
+    configs:
+      - source: redpanda_console_config
+        target: /etc/redpanda/config.yaml
+    ports:
+      - "8082:8080"  # Redpanda Console UI → http://localhost:8082
+
+  # Topic initialisation – creates canonical topics on first startup
+  redpanda-init:
+    image: redpandadata/redpanda:v24.3.1
+    container_name: pesagraph-redpanda-init
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        rpk -X brokers=redpanda:9092 topic create \
+          pesagraph.canonical-transactions \
+          pesagraph.reconciliation-results \
+          pesagraph.liquidity-snapshots \
+          pesagraph.audit-events \
+          --partitions 3 \
+          --replicas 1 || true
+    restart: "no"
+
+configs:
+  redpanda_console_config:
+    content: |
+      kafka:
+        brokers: ["redpanda:9092"]
+      schemaRegistry:
+        enabled: true
+        urls: ["http://redpanda:8081"]
+
+volumes:
+  redpanda_data:
+
+networks:
+  default:
+    name: pesagraph-network
