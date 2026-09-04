@@ -27,5 +27,7 @@
     <ProjectReference Include="..\..\src\PesaGraph.Modules\Liquidity\PesaGraph.Liquidity.csproj" />
     <ProjectReference Include="..\..\src\PesaGraph.Modules\Audit\PesaGraph.Audit.csproj" />
     <ProjectReference Include="..\..\src\PesaGraph.Modules\Conversational\PesaGraph.Conversational.csproj" />
+    <ProjectReference Include="..\..\src\PesaGraph.Modules\Notifications\PesaGraph.Notifications.csproj" />
+    <ProjectReference Include="..\..\src\PesaGraph.Modules\Providers\PesaGraph.Providers.csproj" />
   </ItemGroup>
 </Project>

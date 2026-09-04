@@ -81,3 +81,8 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 
 app.Run();
+
+namespace PesaGraph.Api
+{
+    public partial class Program { }
+}

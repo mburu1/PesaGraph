@@ -5,7 +5,7 @@ namespace PesaGraph.Providers.Daraja.Models;
 
 public record DarajaAuthResponse(
     [property: JsonPropertyName("access_token")] string AccessToken,
-    [property: JsonPropertyName("expires_in")] string ExpiresIn);
+    [property: JsonPropertyName("expires_in")] object? ExpiresIn);
 
 public record DarajaStkCallback(
     [property: JsonPropertyName("Body")] DarajaStkBody Body);
